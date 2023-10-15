@@ -1,38 +1,42 @@
-use chrono::{self, Duration};
-use ini::Ini;
 use sorting::Sorter;
+use config::Config;
+use std::error::Error;
 
 mod config;
 mod sorting;
 
-fn sort_loop(conf: &Ini) -> () {
-    let date = chrono::offset::Local::now().checked_add_signed(Duration::seconds(1)).unwrap();
-    let interval = Duration::seconds(10);
+fn sort_loop(conf: Config) -> Result<(), Box<dyn Error>> {
+    let time_str = conf.start_datetime.to_rfc2822();
+    eprintln!("Sorting scheduled at {}", time_str);
+
 
     let mut sorter = Sorter::new();
-    let recv = sorter.schedule_sorting(&conf, date, interval).unwrap();
-
-    //let mut i = 0;
+    let recv = sorter.schedule_sorting(conf).unwrap();
     loop {
         match recv.recv() {
             // faulure to receive result means timer has stopped so we exit the loop
-            Err(_) => return, 
+            Err(_) => return Ok(()), 
             Ok(r) => {
                 match r {
                     true => eprintln!("Sorting finished successfully!"),
-                    false => println!("Sorting finished with errors!"),
+                    false => eprintln!("Sorting finished with errors!"),
                 }
             },
         };
-        // i += 1;
-        // if i == 5 {
-        //     sorter.stop_scheduled_sorting();
-        //     println!("Stopped scheduling")
-        // }
     }
 }
 
 fn main() {
-    let conf = config::get();
-    sort_loop(&conf)
+    match config::get() {
+        Ok(conf) => match sort_loop(conf) {
+            Ok(_) => {},
+            Err(e) => {
+                eprintln!("Sorting: {}", e)
+            },
+        },
+        Err(e) => {
+            eprintln!("Config: {}", e)
+        },
+    };
+    
 }
